@@ -1,4 +1,4 @@
-#import pillow
+from PIL import Image
 import argparse
 import os
 
@@ -35,19 +35,19 @@ def parse_arguments():
         '--height', '-ih',
         type=int,
         help='required image height',
-        default=0
+        default=None
     )
     parser.add_argument(
         '--width', '-w',
         type=int,
         help='required width',
-        default=0
+        default=None
     )
     parser.add_argument(
         '--scale', '-s',
         type=float,
         help='required width',
-        default=1
+        default=None
     )
     parser.add_argument(
         '--output', '-o',
@@ -58,11 +58,66 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def resize_image(path_to_original, path_to_result):
-    pass
+def calc_result_size(origin_size, result_size, scale):
+    if scale is not None:
+        if not result_size == (None, None):
+            msg = "Both the scale and result image size are given."
+            raise AttributeError(msg)
+        calculated_size = [round(dim * scale) for dim in origin_size]
+        proportion_changed = False
+        return calculated_size, proportion_changed
+    if result_size is (None, None):
+        msg = "No information about result size is given."
+        raise AttributeError(msg)
+    origin_width, origin_height = origin_size
+    origin_proportion = origin_width / origin_height
+    result_width, result_height = result_size
+    proportion_changed = False
+    if result_width is None:
+        calculated_scale = result_height / origin_height
+        calculated_width = round(origin_width * calculated_scale)
+        return (calculated_width, result_height), proportion_changed
+    if result_height is None:
+        calculated_scale = result_width / origin_width
+        calculated_height = round(origin_height * calculated_scale)
+        return (result_width, calculated_height), proportion_changed
+    calculated_proportion = result_width / result_height
+    if not origin_proportion == calculated_proportion:
+        proportion_changed = True
+    return result_size, proportion_changed
+
+
+def resize_image(path_to_original, path_to_result, result_size, scale):
+    with Image.open(path_to_original) as origin_image:
+        origin_size = origin_image.size
+        calculated_size, proportion_changed = calc_result_size(
+            origin_size,
+            result_size,
+            scale
+        )
+        result_image = origin_image.resize(calculated_size)
+    calculated_width, calculated_height = calculated_size
+    string_size = "_{0}x{1}.".format(calculated_width, calculated_height)
+    if path_to_result is not None:
+        image_filename = os.path.basename(path_to_original)
+        print(image_filename)
+        filename_array = image_filename.split('.')
+        output_filename = string_size.join(filename_array)
+        output_path = ''.join((path_to_result, output_filename))
+    else:
+        path_array = path_to_original.split('.')
+        output_path =string_size.join(path_array)
+    result_image.save(output_path)
+    return proportion_changed
 
 
 if __name__ == '__main__':
-
     args = parse_arguments()
-    print(args)
+    proportion_changed = resize_image(
+        args.image_path,
+        args.output,
+        (args.width, args.height),
+        args.scale
+    )
+    if proportion_changed:
+        print("Warning: the image proportions are changed!")
