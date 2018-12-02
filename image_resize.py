@@ -67,7 +67,7 @@ def calc_result_size(origin_size, result_size, scale):
         calculated_size = [round(dim * scale) for dim in origin_size]
         proportion_changed = False
         return calculated_size, proportion_changed
-    if result_size is (None, None):
+    if result_size == (None, None):
         msg = "No information about result size is given."
         raise AttributeError(msg)
     origin_width, origin_height = origin_size
