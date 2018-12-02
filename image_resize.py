@@ -2,15 +2,16 @@ from PIL import Image
 import argparse
 import os
 
-def validate_image_path(input_string, extensions=('jpg', 'png')):
+def validate_image_path(input_string):
     if not os.path.isfile(input_string):
-        msg = "File doesn't exist: '{0}'.".format(input_string)
-        raise argparse.ArgumentError(msg)
-    filename, extension = input_string.split('.')
-    if not extension in extensions:
-        msg = "File is not an jpg or png image: '{0}'.".format(input_string)
-        raise argparse.ArgumentTypeError(msg)
-    return input_string
+        msg = "The file doesn't exist: '{0}'.".format(input_string)
+        raise IOError(msg)
+    try:
+        image = Image.open(input_string, 'r')
+        image.close()
+        return True
+    except OSError:
+        return False
 
 
 def validate_directory(input_string):
@@ -28,7 +29,7 @@ def parse_arguments():
     )
     parser.add_argument(
         'image_path',
-        type=validate_image_path,
+        type=str,
         help='input image filename'
     )
     parser.add_argument(
@@ -87,37 +88,50 @@ def calc_result_size(origin_size, result_size, scale):
     return result_size, proportion_changed
 
 
-def resize_image(path_to_original, path_to_result, result_size, scale):
-    with Image.open(path_to_original) as origin_image:
-        origin_size = origin_image.size
-        calculated_size, proportion_changed = calc_result_size(
-            origin_size,
-            result_size,
-            scale
-        )
-        result_image = origin_image.resize(calculated_size)
+def get_output_path(path_to_original, calculated_size, path_to_result):
     calculated_width, calculated_height = calculated_size
-    string_size = "_{0}x{1}.".format(calculated_width, calculated_height)
+    string_size = "_{0}x{1}".format(calculated_width, calculated_height)
+    image_filename = os.path.basename(path_to_original)
+    filename_array = os.path.splitext(image_filename)
+    output_filename = string_size.join(filename_array)
     if path_to_result is not None:
-        image_filename = os.path.basename(path_to_original)
-        print(image_filename)
-        filename_array = image_filename.split('.')
-        output_filename = string_size.join(filename_array)
-        output_path = ''.join((path_to_result, output_filename))
+        output_path = os.path.join(path_to_result, output_filename)
     else:
-        path_array = path_to_original.split('.')
-        output_path =string_size.join(path_array)
+        output_path = os.path.join(
+            os.path.dirname(path_to_original),
+            output_filename
+        )
+    return output_path
+
+
+def resize_image(path_to_original, path_to_result, result_size, scale):
+    origin_image = Image.open(path_to_original)
+    origin_size = origin_image.size
+    calculated_size, proportion_changed = calc_result_size(
+        origin_size,
+        result_size,
+        scale
+    )
+    result_image = origin_image.resize(calculated_size)
+    origin_image.close()
+    output_path = get_output_path(
+        path_to_original,
+        calculated_size,
+        path_to_result,
+    )
     result_image.save(output_path)
     return proportion_changed
 
 
 if __name__ == '__main__':
     args = parse_arguments()
+    if not validate_image_path(args.image_path):
+        exit("Can't read an origin image")
     proportion_changed = resize_image(
         args.image_path,
         args.output,
         (args.width, args.height),
         args.scale
-    )
+        )
     if proportion_changed:
         print("Warning: the image proportions are changed!")
